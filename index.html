@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>강의 스케줄 관리</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;font-size:14px;color:#1a1a1a;background:#f5f6f8}
+:root{--blue:#185FA5;--blue-lt:#E6F1FB;--blue-dk:#0C447C;--green:#3B6D11;--green-lt:#EAF3DE;--amber:#854F0B;--amber-lt:#FAEEDA;--red:#A32D2D;--red-lt:#FCEBEB;--gray:#5F5E5A;--gray-lt:#F1EFE8;--border:#e2e2e2;--radius:8px;--radius-lg:12px}
+
+/* layout */
+.app{display:flex;min-height:100vh}
+.sidebar{width:200px;background:#fff;border-right:1px solid var(--border);padding:1.25rem 0;flex-shrink:0;position:sticky;top:0;height:100vh}
+.sidebar-logo{font-size:15px;font-weight:700;color:var(--blue);padding:0 1.25rem 1.25rem;border-bottom:1px solid var(--border);margin-bottom:.5rem}
+.sidebar-logo span{display:block;font-size:11px;font-weight:400;color:var(--gray);margin-top:2px}
+.nav-item{display:flex;align-items:center;gap:8px;padding:10px 1.25rem;font-size:13px;color:var(--gray);cursor:pointer;border-left:3px solid transparent;transition:all .15s}
+.nav-item:hover{background:#f5f6f8;color:#1a1a1a}
+.nav-item.active{background:var(--blue-lt);color:var(--blue-dk);border-left-color:var(--blue);font-weight:600}
+.nav-icon{font-size:16px;width:20px;text-align:center}
+.main{flex:1;padding:1.5rem;overflow-x:auto}
+.page{display:none}
+.page.active{display:block}
+
+/* header */
+.page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap;gap:8px}
+.page-title{font-size:18px;font-weight:700;color:#1a1a1a}
+
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.25rem}
+.stat{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1rem}
+.stat-label{font-size:11px;color:var(--gray);margin-bottom:4px}
+.stat-value{font-size:20px;font-weight:700}
+.stat-value.blue{color:var(--blue)}
+.stat-value.green{color:var(--green)}
+.stat-value.amber{color:var(--amber)}
+.stat-value.red{color:var(--red)}
+
+/* filters */
+.toolbar{display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:center}
+.filter-btn{font-size:12px;padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:#fff;cursor:pointer;color:var(--gray);transition:all .15s}
+.filter-btn:hover{border-color:var(--blue);color:var(--blue)}
+.filter-btn.active{background:var(--blue-lt);color:var(--blue-dk);border-color:var(--blue);font-weight:600}
+.ml-auto{margin-left:auto}
+
+/* table */
+.table-wrap{background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;overflow-x:auto;margin-bottom:1.5rem}
+table{width:100%;border-collapse:collapse;min-width:860px}
+thead tr{background:#f8f9fb}
+th{padding:10px 12px;text-align:left;font-size:12px;font-weight:600;color:var(--gray);border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:10px 12px;font-size:13px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafbfc}
+
+/* badges */
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
+.b-pub{background:var(--blue-lt);color:var(--blue-dk)}
+.b-prv{background:var(--amber-lt);color:var(--amber)}
+.b-edu{background:var(--green-lt);color:var(--green)}
+.b-etc{background:var(--gray-lt);color:var(--gray)}
+.b-paid{background:var(--green-lt);color:var(--green)}
+.b-part{background:var(--amber-lt);color:var(--amber)}
+.b-unpaid{background:var(--red-lt);color:var(--red)}
+.b-sent{background:var(--blue-lt);color:var(--blue-dk)}
+.b-pending{background:var(--amber-lt);color:var(--amber)}
+.b-confirm{background:var(--green-lt);color:var(--green)}
+.b-reject{background:var(--red-lt);color:var(--red)}
+
+/* buttons */
+.btn{padding:7px 14px;border-radius:var(--radius);font-size:13px;cursor:pointer;border:1px solid var(--border);background:#fff;color:#1a1a1a;display:inline-flex;align-items:center;gap:5px;transition:all .15s}
+.btn:hover{background:#f5f6f8}
+.btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.btn.primary:hover{background:var(--blue-dk)}
+.btn.success{background:var(--green);color:#fff;border-color:var(--green)}
+.btn.danger{background:var(--red);color:#fff;border-color:var(--red)}
+.icon-btn{border:none;background:none;cursor:pointer;padding:4px 6px;border-radius:4px;color:var(--gray);font-size:15px;line-height:1}
+.icon-btn:hover.edit{color:var(--blue)}
+.icon-btn:hover.del{color:var(--red)}
+select.inline{font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer}
+
+/* modal */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:var(--radius-lg);padding:1.5rem;width:580px;max-width:96vw;max-height:92vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:1.25rem;padding-bottom:.75rem;border-bottom:1px solid var(--border)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group.full{grid-column:1/-1}
+.form-group label{font-size:12px;color:var(--gray);font-weight:600}
+.form-group input,.form-group select,.form-group textarea{font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);background:#fff;color:#1a1a1a;width:100%}
+.form-group textarea{resize:vertical;min-height:70px}
+.sec-divider{grid-column:1/-1;font-size:12px;font-weight:700;color:var(--blue);padding:.5rem 0 .25rem;border-bottom:1px solid var(--blue-lt);margin-top:.25rem}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border)}
+.dur-display{background:#f5f6f8;padding:7px 10px;border-radius:var(--radius);font-size:13px;color:var(--gray);border:1px solid var(--border)}
+
+/* calendar */
+.cal-nav{display:flex;align-items:center;gap:12px;margin-bottom:1rem}
+.cal-nav h3{font-size:16px;font-weight:700;min-width:120px;text-align:center}
+.cal-grid{background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.cal-head{display:grid;grid-template-columns:repeat(7,1fr)}
+.cal-head div{text-align:center;padding:8px;font-size:12px;font-weight:700;background:#f8f9fb;border-bottom:1px solid var(--border);color:var(--gray)}
+.cal-head div:first-child{color:#c0392b}
+.cal-head div:last-child{color:#2980b9}
+.cal-body{display:grid;grid-template-columns:repeat(7,1fr)}
+.cal-cell{min-height:90px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px;cursor:default}
+.cal-cell:nth-child(7n){border-right:none}
+.cal-cell.other-month .cal-day{color:#ccc}
+.cal-cell.today{background:#fffbea}
+.cal-cell.today .cal-day{background:var(--blue);color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-weight:700}
+.cal-day{font-size:12px;font-weight:600;margin-bottom:4px;color:#1a1a1a}
+.cal-cell:nth-child(7n+1) .cal-day{color:#c0392b}
+.cal-cell:nth-child(7n) .cal-day{color:#2980b9}
+.cal-event{font-size:10px;padding:2px 5px;border-radius:3px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;line-height:1.4}
+.cal-event.pub{background:var(--blue-lt);color:var(--blue-dk)}
+.cal-event.prv{background:var(--amber-lt);color:var(--amber)}
+.cal-event.edu{background:var(--green-lt);color:var(--green)}
+.cal-event.etc{background:var(--gray-lt);color:var(--gray)}
+
+/* proposal */
+.prop-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:1rem}
+.prop-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem}
+.prop-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem}
+.prop-card-title{font-size:14px;font-weight:700;line-height:1.3}
+.prop-card-meta{font-size:12px;color:var(--gray);margin-top:4px;line-height:1.6}
+.prop-card-footer{display:flex;justify-content:space-between;align-items:center;margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border)}
+
+.empty{text-align:center;padding:3rem;color:var(--gray);font-size:14px}
+.empty-icon{font-size:36px;margin-bottom:.5rem}
+
+/* tooltip */
+.tooltip-box{position:fixed;background:#1a1a1a;color:#fff;font-size:12px;padding:6px 10px;border-radius:6px;pointer-events:none;z-index:999;display:none;max-width:220px;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="tooltip-box" id="tooltip"></div>
+<div class="app">
+  <!-- sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">📋 강의 관리<span>Vibe Coding 강사용</span></div>
+    <div class="nav-item active" onclick="showPage('schedule',this)"><span class="nav-icon">📅</span>스케줄 목록</div>
+    <div class="nav-item" onclick="showPage('calendar',this)"><span class="nav-icon">🗓️</span>월별 달력</div>
+    <div class="nav-item" onclick="showPage('proposal',this)"><span class="nav-icon">📨</span>제안서 발송</div>
+  </aside>
+
+  <main class="main">
+    <!-- ── PAGE 1: 스케줄 목록 ── -->
+    <div class="page active" id="page-schedule">
+      <div class="page-header">
+        <div class="page-title">강의 스케줄 목록</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn success" onclick="exportXlsx()">⬇ 엑셀 내보내기</button>
+          <button class="btn primary" onclick="openLecModal()">＋ 강의 추가</button>
+        </div>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="toolbar">
+        <span style="font-size:12px;color:var(--gray)">교육처 유형:</span>
+        <button class="filter-btn active" onclick="setFilter('all',this)">전체</button>
+        <button class="filter-btn" onclick="setFilter('공공기관',this)">공공기관</button>
+        <button class="filter-btn" onclick="setFilter('민간기관',this)">민간기관</button>
+        <button class="filter-btn" onclick="setFilter('교육기관',this)">교육기관</button>
+        <button class="filter-btn" onclick="setFilter('기타',this)">기타</button>
+        <span style="margin-left:auto;font-size:12px;color:var(--gray)">정렬:</span>
+        <select class="inline" onchange="sortBy=this.value;renderTable()">
+          <option value="date">날짜순</option>
+          <option value="fee">강의료순</option>
+          <option value="org">교육처순</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>강좌명</th><th>교육처</th><th>유형</th><th>일자·요일</th>
+              <th>강의 시간</th><th>수강 인원</th><th>강의료</th><th>입금</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── PAGE 2: 달력 ── -->
+    <div class="page" id="page-calendar">
+      <div class="page-header">
+        <div class="page-title">월별 달력</div>
+      </div>
+      <div class="cal-nav">
+        <button class="btn" onclick="changeMonth(-1)">◀ 이전</button>
+        <h3 id="cal-title"></h3>
+        <button class="btn" onclick="changeMonth(1)">다음 ▶</button>
+        <button class="btn ml-auto" onclick="goToday()">오늘</button>
+      </div>
+      <div class="cal-grid">
+        <div class="cal-head">
+          <div>일</div><div>월</div><div>화</div><div>수</div>
+          <div>목</div><div>금</div><div>토</div>
+        </div>
+        <div class="cal-body" id="cal-body"></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:.75rem;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--gray)">범례:</span>
+        <span class="badge b-pub" style="font-size:11px">공공기관</span>
+        <span class="badge b-prv" style="font-size:11px">민간기관</span>
+        <span class="badge b-edu" style="font-size:11px">교육기관</span>
+        <span class="badge b-etc" style="font-size:11px">기타</span>
+      </div>
+    </div>
+
+    <!-- ── PAGE 3: 제안서 발송 ── -->
+    <div class="page" id="page-proposal">
+      <div class="page-header">
+        <div class="page-title">제안서 발송 기록</div>
+        <button class="btn primary" onclick="openPropModal()">＋ 발송 기록 추가</button>
+      </div>
+      <div class="stats" id="prop-stats"></div>
+      <div class="toolbar">
+        <span style="font-size:12px;color:var(--gray)">진행 상태:</span>
+        <button class="filter-btn active" onclick="setPropFilter('all',this)">전체</button>
+        <button class="filter-btn" onclick="setPropFilter('발송완료',this)">발송완료</button>
+        <button class="filter-btn" onclick="setPropFilter('검토중',this)">검토중</button>
+        <button class="filter-btn" onclick="setPropFilter('확정',this)">확정</button>
+        <button class="filter-btn" onclick="setPropFilter('거절',this)">거절</button>
+      </div>
+      <div class="prop-cards" id="prop-cards"></div>
+    </div>
+  </main>
+</div>
+
+<!-- 강의 모달 -->
+<div class="overlay" id="lec-modal">
+  <div class="modal">
+    <div class="modal-title" id="lec-modal-title">강의 추가</div>
+    <div class="form-grid">
+      <div class="form-group full"><label>강좌명</label><input id="f-name" placeholder="예: Vibe Coding 기초 과정"></div>
+      <div class="form-group"><label>교육(수요)처명</label><input id="f-org" placeholder="예: 서울시청"></div>
+      <div class="form-group"><label>교육처 유형</label>
+        <select id="f-type"><option>공공기관</option><option>민간기관</option><option>교육기관</option><option>기타</option></select>
+      </div>
+      <div class="form-group"><label>강의 날짜</label><input type="date" id="f-date"></div>
+      <div class="form-group"><label>비고 (날짜 메모)</label><input id="f-note" placeholder="예: 격주 수요일, 총 6회"></div>
+      <div class="sec-divider">⏱ 강의 시간</div>
+      <div class="form-group"><label>시작 시간</label><input type="time" id="f-start" value="10:00" oninput="calcDur()"></div>
+      <div class="form-group"><label>종료 시간</label><input type="time" id="f-end" value="11:30" oninput="calcDur()"></div>
+      <div class="form-group full"><label>소요시간</label><div class="dur-display" id="f-dur">90분</div></div>
+      <div class="sec-divider">👥 수강 인원</div>
+      <div class="form-group"><label>수강 신청 인원 (명)</label><input type="number" id="f-reg" placeholder="0" min="0"></div>
+      <div class="form-group"><label>수강 완료 인원 (명)</label><input type="number" id="f-comp" placeholder="0" min="0"></div>
+      <div class="sec-divider">💰 강의료</div>
+      <div class="form-group"><label>강의료 (원)</label><input type="number" id="f-fee" placeholder="예: 300000" min="0"></div>
+      <div class="form-group"><label>입금 여부</label>
+        <select id="f-paid"><option>미입금</option><option>입금완료</option><option>일부입금</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeLecModal()">취소</button>
+      <button class="btn primary" onclick="saveLec()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 제안서 모달 -->
+<div class="overlay" id="prop-modal">
+  <div class="modal">
+    <div class="modal-title" id="prop-modal-title">제안서 발송 기록 추가</div>
+    <div class="form-grid">
+      <div class="form-group full"><label>제안 강좌명</label><input id="p-name" placeholder="예: AI 활용 실무 교육"></div>
+      <div class="form-group"><label>교육(수요)처명</label><input id="p-org" placeholder="예: 강남구청"></div>
+      <div class="form-group"><label>교육처 유형</label>
+        <select id="p-type"><option>공공기관</option><option>민간기관</option><option>교육기관</option><option>기타</option></select>
+      </div>
+      <div class="form-group"><label>담당자명</label><input id="p-contact" placeholder="예: 홍길동 팀장"></div>
+      <div class="form-group"><label>담당자 연락처</label><input id="p-tel" placeholder="예: 010-1234-5678"></div>
+      <div class="form-group"><label>발송 일자</label><input type="date" id="p-date"></div>
+      <div class="form-group"><label>진행 상태</label>
+        <select id="p-status"><option>발송완료</option><option>검토중</option><option>확정</option><option>거절</option></select>
+      </div>
+      <div class="form-group"><label>제안 강의료 (원)</label><input type="number" id="p-fee" placeholder="예: 500000" min="0"></div>
+      <div class="form-group"><label>희망 교육 일정</label><input id="p-schedule" placeholder="예: 7월 중 2회"></div>
+      <div class="form-group full"><label>메모</label><textarea id="p-memo" placeholder="추가 내용, 후속 액션 등"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closePropModal()">취소</button>
+      <button class="btn primary" onclick="saveProp()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DAYS=['일','월','화','수','목','금','토'];
+let lectures = JSON.parse(localStorage.getItem('lec_v2')||'[]');
+let proposals = JSON.parse(localStorage.getItem('prop_v2')||'[]');
+let lecEditId=null, propEditId=null;
+let filterType='all', sortBy='date';
+let propFilterStatus='all';
+let calYear=new Date().getFullYear(), calMonth=new Date().getMonth();
+
+function save(){
+  localStorage.setItem('lec_v2',JSON.stringify(lectures));
+  localStorage.setItem('prop_v2',JSON.stringify(proposals));
+}
+
+/* ── helpers ── */
+function dayKor(d){if(!d)return'';const dt=new Date(d+'T00:00:00');return DAYS[dt.getDay()]+'요일'}
+function fmtDate(d){if(!d)return'';const[y,m,dd]=d.split('-');return`${y}.${m}.${dd}`}
+function getDur(s,e){
+  if(!s||!e)return'';
+  const[sh,sm]=s.split(':').map(Number),[eh,em]=e.split(':').map(Number);
+  const diff=(eh*60+em)-(sh*60+sm);
+  return diff>0?diff+'분':'';
+}
+function fmtMoney(n){return n?Number(n).toLocaleString('ko-KR')+'원':'—'}
+function typeCls(t){return{공공기관:'pub',민간기관:'prv',교육기관:'edu',기타:'etc'}[t]||'etc'}
+function typeBadge(t){return`<span class="badge b-${typeCls(t)}">${t}</span>`}
+function paidBadge(p){const c=p==='입금완료'?'paid':p==='일부입금'?'part':'unpaid';return`<span class="badge b-${c}">${p||'미입금'}</span>`}
+function statusBadge(s){const c={발송완료:'sent',검토중:'pending',확정:'confirm',거절:'reject'}[s]||'sent';return`<span class="badge b-${c}">${s}</span>`}
+
+/* ── nav ── */
+function showPage(id,el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  el.classList.add('active');
+  if(id==='calendar')renderCal();
+  if(id==='proposal'){renderPropStats();renderPropCards();}
+}
+
+/* ── LECTURE modal ── */
+function openLecModal(id){
+  lecEditId=id||null;
+  document.getElementById('lec-modal-title').textContent=id?'강의 수정':'강의 추가';
+  const r=id?lectures.find(x=>x.id===id):{};
+  document.getElementById('f-name').value=r.name||'';
+  document.getElementById('f-org').value=r.org||'';
+  document.getElementById('f-type').value=r.orgType||'공공기관';
+  document.getElementById('f-date').value=r.date||'';
+  document.getElementById('f-note').value=r.note||'';
+  document.getElementById('f-start').value=r.startTime||'10:00';
+  document.getElementById('f-end').value=r.endTime||'11:30';
+  document.getElementById('f-reg').value=r.regCount||'';
+  document.getElementById('f-comp').value=r.compCount||'';
+  document.getElementById('f-fee').value=r.fee||'';
+  document.getElementById('f-paid').value=r.paid||'미입금';
+  calcDur();
+  document.getElementById('lec-modal').classList.add('open');
+}
+function closeLecModal(){document.getElementById('lec-modal').classList.remove('open');lecEditId=null}
+function calcDur(){
+  const s=document.getElementById('f-start').value,e=document.getElementById('f-end').value;
+  const d=getDur(s,e);
+  document.getElementById('f-dur').textContent=d||'—';
+}
+function saveLec(){
+  const name=document.getElementById('f-name').value.trim();
+  if(!name){alert('강좌명을 입력해 주세요.');return}
+  const row={
+    id:lecEditId||Date.now().toString(),
+    name,org:document.getElementById('f-org').value.trim(),
+    orgType:document.getElementById('f-type').value,
+    date:document.getElementById('f-date').value,
+    note:document.getElementById('f-note').value.trim(),
+    startTime:document.getElementById('f-start').value,
+    endTime:document.getElementById('f-end').value,
+    regCount:parseInt(document.getElementById('f-reg').value)||0,
+    compCount:parseInt(document.getElementById('f-comp').value)||0,
+    fee:parseInt(document.getElementById('f-fee').value)||0,
+    paid:document.getElementById('f-paid').value,
+  };
+  if(lecEditId){const i=lectures.findIndex(x=>x.id===lecEditId);if(i>=0)lectures[i]=row}
+  else lectures.push(row);
+  save();renderStats();renderTable();closeLecModal();
+}
+function delLec(id){if(!confirm('삭제할까요?'))return;lectures=lectures.filter(x=>x.id!==id);save();renderStats();renderTable()}
+
+/* ── STATS ── */
+function renderStats(){
+  const total=lectures.length;
+  const totalFee=lectures.reduce((a,r)=>a+(r.fee||0),0);
+  const paid=lectures.filter(r=>r.paid==='입금완료').reduce((a,r)=>a+(r.fee||0),0);
+  const unpaid=totalFee-paid;
+  document.getElementById('stats').innerHTML=`
+    <div class="stat"><div class="stat-label">총 강의 건수</div><div class="stat-value blue">${total}건</div></div>
+    <div class="stat"><div class="stat-label">총 강의료 합계</div><div class="stat-value">${totalFee?totalFee.toLocaleString('ko-KR')+'원':'—'}</div></div>
+    <div class="stat"><div class="stat-label">입금 완료</div><div class="stat-value green">${paid?paid.toLocaleString('ko-KR')+'원':'—'}</div></div>
+    <div class="stat"><div class="stat-label">미입금</div><div class="stat-value ${unpaid>0?'red':'gray'}">${unpaid>0?unpaid.toLocaleString('ko-KR')+'원':'—'}</div></div>
+  `;
+}
+
+/* ── TABLE ── */
+function setFilter(t,btn){filterType=t;document.querySelectorAll('#page-schedule .filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderTable()}
+function renderTable(){
+  let rows=[...lectures];
+  if(filterType!=='all')rows=rows.filter(r=>r.orgType===filterType);
+  if(sortBy==='date')rows.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  else if(sortBy==='fee')rows.sort((a,b)=>(b.fee||0)-(a.fee||0));
+  else rows.sort((a,b)=>(a.org||'').localeCompare(b.org||''));
+  const tb=document.getElementById('tbody');
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="9" class="empty"><div class="empty-icon">📭</div>강의 일정이 없어요. 위에서 추가해 주세요.</td></tr>`;return}
+  tb.innerHTML=rows.map(r=>{
+    const dur=getDur(r.startTime,r.endTime);
+    const timeStr=r.startTime&&r.endTime?`${r.startTime} ~ ${r.endTime}<br><small style="color:var(--gray)">${dur}</small>`:'—';
+    const dateStr=r.date?`${fmtDate(r.date)}&nbsp;<span style="color:var(--gray)">${dayKor(r.date)}</span>`:'—';
+    return`<tr>
+      <td style="font-weight:600;max-width:150px">${r.name||'—'}</td>
+      <td>${r.org||'—'}${r.note?`<br><small style="color:var(--gray)">${r.note}</small>`:''}</td>
+      <td>${typeBadge(r.orgType)}</td>
+      <td style="white-space:nowrap">${dateStr}</td>
+      <td style="white-space:nowrap">${timeStr}</td>
+      <td>신청 <b>${r.regCount||0}</b>명<br><small style="color:var(--gray)">완료 ${r.compCount||0}명</small></td>
+      <td style="white-space:nowrap">${fmtMoney(r.fee)}</td>
+      <td>${paidBadge(r.paid)}</td>
+      <td style="white-space:nowrap">
+        <button class="icon-btn edit" onclick="openLecModal('${r.id}')" title="수정">✏️</button>
+        <button class="icon-btn del" onclick="delLec('${r.id}')" title="삭제">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── EXCEL EXPORT ── */
+function exportXlsx(){
+  if(!lectures.length){alert('내보낼 데이터가 없어요.');return}
+  const rows=lectures.map(r=>({
+    '강좌명':r.name||'',
+    '교육처':r.org||'',
+    '교육처유형':r.orgType||'',
+    '강의날짜':r.date||'',
+    '요일':r.date?DAYS[new Date(r.date+'T00:00:00').getDay()]+'요일':'',
+    '시작시간':r.startTime||'',
+    '종료시간':r.endTime||'',
+    '소요시간(분)':getDur(r.startTime,r.endTime).replace('분','')||'',
+    '수강신청인원':r.regCount||0,
+    '수강완료인원':r.compCount||0,
+    '강의료(원)':r.fee||0,
+    '입금여부':r.paid||'미입금',
+    '비고':r.note||''
+  }));
+  const ws=XLSX.utils.json_to_sheet(rows);
+  // 열 너비 설정
+  ws['!cols']=[{wch:22},{wch:18},{wch:10},{wch:12},{wch:8},{wch:8},{wch:8},{wch:12},{wch:12},{wch:12},{wch:14},{wch:10},{wch:20}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,'강의스케줄',ws);
+  // 제안서 시트도 포함
+  if(proposals.length){
+    const prows=proposals.map(p=>({
+      '제안강좌명':p.name||'',
+      '교육처':p.org||'',
+      '교육처유형':p.orgType||'',
+      '담당자':p.contact||'',
+      '연락처':p.tel||'',
+      '발송일자':p.date||'',
+      '진행상태':p.status||'',
+      '제안강의료(원)':p.fee||0,
+      '희망일정':p.schedule||'',
+      '메모':p.memo||''
+    }));
+    const ws2=XLSX.utils.json_to_sheet(prows);
+    ws2['!cols']=[{wch:22},{wch:18},{wch:10},{wch:12},{wch:16},{wch:12},{wch:10},{wch:14},{wch:16},{wch:30}];
+    XLSX.utils.book_append_sheet(wb,'제안서발송',ws2);
+  }
+  const today=new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb,`강의스케줄_${today}.xlsx`);
+}
+
+/* ── CALENDAR ── */
+function changeMonth(d){calMonth+=d;if(calMonth>11){calMonth=0;calYear++}if(calMonth<0){calMonth=11;calYear--}renderCal()}
+function goToday(){calYear=new Date().getFullYear();calMonth=new Date().getMonth();renderCal()}
+function renderCal(){
+  const months=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  document.getElementById('cal-title').textContent=`${calYear}년 ${months[calMonth]}`;
+  const first=new Date(calYear,calMonth,1);
+  const last=new Date(calYear,calMonth+1,0);
+  const startDay=first.getDay();
+  const today=new Date().toISOString().slice(0,10);
+  let cells=[];
+  // 이전 달 채우기
+  for(let i=startDay-1;i>=0;i--){
+    const d=new Date(calYear,calMonth,0-i);
+    cells.push({date:d,cur:false});
+  }
+  for(let d=1;d<=last.getDate();d++) cells.push({date:new Date(calYear,calMonth,d),cur:true});
+  // 다음 달
+  const rem=7-cells.length%7;
+  if(rem<7)for(let i=1;i<=rem;i++) cells.push({date:new Date(calYear,calMonth+1,i),cur:false});
+
+  const body=document.getElementById('cal-body');
+  body.innerHTML=cells.map(({date,cur})=>{
+    const ds=date.toISOString().slice(0,10);
+    const isToday=ds===today;
+    const evts=lectures.filter(r=>r.date===ds);
+    const evtHtml=evts.map(r=>`<div class="cal-event ${typeCls(r.orgType)}" onclick="openLecModal('${r.id}')" title="${r.name} | ${r.startTime}~${r.endTime}">${r.startTime} ${r.name}</div>`).join('');
+    const dayNum=`<div class="cal-day">${date.getDate()}</div>`;
+    return`<div class="cal-cell ${cur?'':'other-month'} ${isToday?'today':''}">${dayNum}${evtHtml}</div>`;
+  }).join('');
+}
+
+/* ── PROPOSAL ── */
+function renderPropStats(){
+  const total=proposals.length;
+  const confirm=proposals.filter(p=>p.status==='확정').length;
+  const pending=proposals.filter(p=>p.status==='검토중'||p.status==='발송완료').length;
+  const reject=proposals.filter(p=>p.status==='거절').length;
+  document.getElementById('prop-stats').innerHTML=`
+    <div class="stat"><div class="stat-label">총 제안 건수</div><div class="stat-value blue">${total}건</div></div>
+    <div class="stat"><div class="stat-label">확정</div><div class="stat-value green">${confirm}건</div></div>
+    <div class="stat"><div class="stat-label">검토중 / 발송완료</div><div class="stat-value amber">${pending}건</div></div>
+    <div class="stat"><div class="stat-label">거절</div><div class="stat-value red">${reject}건</div></div>
+  `;
+}
+function setPropFilter(s,btn){propFilterStatus=s;document.querySelectorAll('#page-proposal .filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderPropCards()}
+function renderPropCards(){
+  let rows=[...proposals];
+  if(propFilterStatus!=='all')rows=rows.filter(p=>p.status===propFilterStatus);
+  rows.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const el=document.getElementById('prop-cards');
+  if(!rows.length){el.innerHTML=`<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📨</div>발송 기록이 없어요. 위에서 추가해 주세요.</div>`;return}
+  el.innerHTML=rows.map(p=>`
+    <div class="prop-card">
+      <div class="prop-card-header">
+        <div>
+          <div class="prop-card-title">${p.name||'—'}</div>
+          <div class="prop-card-meta">${p.org||'—'} · ${typeBadge(p.orgType)}</div>
+        </div>
+        ${statusBadge(p.status)}
+      </div>
+      <div class="prop-card-meta">
+        📅 발송일: ${fmtDate(p.date)||'—'}<br>
+        👤 담당자: ${p.contact||'—'} ${p.tel?`(${p.tel})`:''}<br>
+        💰 제안 강의료: ${fmtMoney(p.fee)}<br>
+        🗓️ 희망일정: ${p.schedule||'—'}
+        ${p.memo?`<br>📝 ${p.memo}`:''}
+      </div>
+      <div class="prop-card-footer">
+        <select class="inline" onchange="updatePropStatus('${p.id}',this.value)">
+          ${['발송완료','검토중','확정','거절'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+        <div style="display:flex;gap:4px">
+          <button class="icon-btn edit" onclick="openPropModal('${p.id}')" title="수정">✏️</button>
+          <button class="icon-btn del" onclick="delProp('${p.id}')" title="삭제">🗑️</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+function updatePropStatus(id,val){const p=proposals.find(x=>x.id===id);if(p){p.status=val;save();renderPropStats();renderPropCards()}}
+function openPropModal(id){
+  propEditId=id||null;
+  document.getElementById('prop-modal-title').textContent=id?'제안서 기록 수정':'제안서 발송 기록 추가';
+  const p=id?proposals.find(x=>x.id===id):{};
+  document.getElementById('p-name').value=p.name||'';
+  document.getElementById('p-org').value=p.org||'';
+  document.getElementById('p-type').value=p.orgType||'공공기관';
+  document.getElementById('p-contact').value=p.contact||'';
+  document.getElementById('p-tel').value=p.tel||'';
+  document.getElementById('p-date').value=p.date||new Date().toISOString().slice(0,10);
+  document.getElementById('p-status').value=p.status||'발송완료';
+  document.getElementById('p-fee').value=p.fee||'';
+  document.getElementById('p-schedule').value=p.schedule||'';
+  document.getElementById('p-memo').value=p.memo||'';
+  document.getElementById('prop-modal').classList.add('open');
+}
+function closePropModal(){document.getElementById('prop-modal').classList.remove('open');propEditId=null}
+function saveProp(){
+  const name=document.getElementById('p-name').value.trim();
+  if(!name){alert('제안 강좌명을 입력해 주세요.');return}
+  const row={
+    id:propEditId||Date.now().toString(),
+    name,org:document.getElementById('p-org').value.trim(),
+    orgType:document.getElementById('p-type').value,
+    contact:document.getElementById('p-contact').value.trim(),
+    tel:document.getElementById('p-tel').value.trim(),
+    date:document.getElementById('p-date').value,
+    status:document.getElementById('p-status').value,
+    fee:parseInt(document.getElementById('p-fee').value)||0,
+    schedule:document.getElementById('p-schedule').value.trim(),
+    memo:document.getElementById('p-memo').value.trim(),
+  };
+  if(propEditId){const i=proposals.findIndex(x=>x.id===propEditId);if(i>=0)proposals[i]=row}
+  else proposals.push(row);
+  save();renderPropStats();renderPropCards();closePropModal();
+}
+function delProp(id){if(!confirm('삭제할까요?'))return;proposals=proposals.filter(x=>x.id!==id);save();renderPropStats();renderPropCards()}
+
+/* ── 샘플 데이터 ── */
+if(!lectures.length){
+  lectures=[
+    {id:'1',name:'Vibe Coding 기초 과정',org:'서울산업진흥원',orgType:'공공기관',date:'2025-07-03',note:'총 4회',startTime:'10:00',endTime:'12:00',regCount:20,compCount:18,fee:400000,paid:'입금완료'},
+    {id:'2',name:'AI 활용 실무과정',org:'(주)ABC기업',orgType:'민간기관',date:'2025-07-10',note:'',startTime:'14:00',endTime:'17:00',regCount:15,compCount:0,fee:600000,paid:'미입금'},
+    {id:'3',name:'ChatGPT 업무활용',org:'한국직업전문학교',orgType:'교육기관',date:'2025-07-17',note:'격주 목요일',startTime:'10:00',endTime:'11:30',regCount:30,compCount:0,fee:300000,paid:'일부입금'},
+  ];
+  proposals=[
+    {id:'p1',name:'Vibe Coding 심화과정',org:'성동구청',orgType:'공공기관',contact:'김민준 담당',tel:'02-123-4567',date:'2025-06-20',status:'검토중',fee:500000,schedule:'8월 중 3회',memo:'7월 초 회신 예정'},
+    {id:'p2',name:'AI 마케팅 활용',org:'(주)패션브랜드',orgType:'민간기관',contact:'이수진 이사',tel:'010-9876-5432',date:'2025-06-15',status:'확정',fee:400000,schedule:'7월 5일 1회',memo:'계약서 발송 완료'},
+  ];
+  save();
+}
+
+/* ── init ── */
+renderStats();renderTable();
+</script>
+</body>
+</html>
