@@ -278,6 +278,8 @@ select.inline{font-size:12px;padding:4px 8px;border:1px solid var(--border);bord
       </div>
       <div class="form-group"><label>제안 강의료 (원)</label><input type="number" id="p-fee" placeholder="예: 500000" min="0"></div>
       <div class="form-group"><label>희망 교육 일정</label><input id="p-schedule" placeholder="예: 7월 중 2회"></div>
+      <div class="form-group"><label>확정 강의 날짜 <span style="color:var(--blue);font-size:11px">※ 확정 시 스케줄 자동 등록</span></label><input type="date" id="p-confirm-date"></div>
+      <div class="form-group"><label>확정 시작시간</label><input type="time" id="p-confirm-start" value="10:00"></div>
       <div class="form-group full"><label>메모</label><textarea id="p-memo" placeholder="추가 내용, 후속 액션 등"></textarea></div>
     </div>
     <div class="modal-footer">
@@ -472,7 +474,8 @@ function renderCal(){
   const first=new Date(calYear,calMonth,1);
   const last=new Date(calYear,calMonth+1,0);
   const startDay=first.getDay();
-  const today=new Date().toISOString().slice(0,10);
+  const _t=new Date();
+  const today=`${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`;
   let cells=[];
   // 이전 달 채우기
   for(let i=startDay-1;i>=0;i--){
@@ -486,7 +489,7 @@ function renderCal(){
 
   const body=document.getElementById('cal-body');
   body.innerHTML=cells.map(({date,cur})=>{
-    const ds=date.toISOString().slice(0,10);
+    const ds=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
     const isToday=ds===today;
     const evts=lectures.filter(r=>r.date===ds);
     const evtHtml=evts.map(r=>`<div class="cal-event ${typeCls(r.orgType)}" onclick="openLecModal('${r.id}')" title="${r.name} | ${r.startTime}~${r.endTime}">${r.startTime} ${r.name}</div>`).join('');
@@ -529,6 +532,7 @@ function renderPropCards(){
         👤 담당자: ${p.contact||'—'} ${p.tel?`(${p.tel})`:''}<br>
         💰 제안 강의료: ${fmtMoney(p.fee)}<br>
         🗓️ 희망일정: ${p.schedule||'—'}
+        ${p.confirmDate?`<br>✅ 확정날짜: <b>${fmtDate(p.confirmDate)}</b> ${p.confirmStart||''}`:''} 
         ${p.memo?`<br>📝 ${p.memo}`:''}
       </div>
       <div class="prop-card-footer">
@@ -543,7 +547,43 @@ function renderPropCards(){
     </div>
   `).join('');
 }
-function updatePropStatus(id,val){const p=proposals.find(x=>x.id===id);if(p){p.status=val;save();renderPropStats();renderPropCards()}}
+function updatePropStatus(id,val){
+  const p=proposals.find(x=>x.id===id);
+  if(p){
+    p.status=val;
+    autoRegisterFromProposal(p);
+    save();renderPropStats();renderPropCards();renderStats();renderTable();
+  }
+}
+
+/* 확정 제안서 → 스케줄 자동 등록 */
+function autoRegisterFromProposal(p){
+  if(p.status!=='확정'||!p.confirmDate)return;
+  // 이미 이 제안서로 등록된 강의가 있으면 업데이트, 없으면 새로 추가
+  const srcId='prop_'+p.id;
+  const existing=lectures.find(l=>l.srcId===srcId);
+  const lecRow={
+    id:existing?existing.id:('lec_'+Date.now()),
+    srcId,
+    name:p.name||'',
+    org:p.org||'',
+    orgType:p.orgType||'공공기관',
+    date:p.confirmDate,
+    note:'제안서에서 자동 등록',
+    startTime:p.confirmStart||'10:00',
+    endTime:'',
+    regCount:0,compCount:0,
+    fee:p.fee||0,
+    paid:'미입금',
+  };
+  if(existing){
+    const i=lectures.findIndex(l=>l.srcId===srcId);
+    lectures[i]=lecRow;
+  } else {
+    lectures.push(lecRow);
+    alert(`✅ "${p.name}" 강의가 스케줄 목록에 자동 등록되었어요!\n날짜: ${fmtDate(p.confirmDate)}\n\n스케줄 목록에서 종료시간·수강인원 등을 추가로 입력해 주세요.`);
+  }
+}
 function openPropModal(id){
   propEditId=id||null;
   document.getElementById('prop-modal-title').textContent=id?'제안서 기록 수정':'제안서 발송 기록 추가';
@@ -557,6 +597,8 @@ function openPropModal(id){
   document.getElementById('p-status').value=p.status||'발송완료';
   document.getElementById('p-fee').value=p.fee||'';
   document.getElementById('p-schedule').value=p.schedule||'';
+  document.getElementById('p-confirm-date').value=p.confirmDate||'';
+  document.getElementById('p-confirm-start').value=p.confirmStart||'10:00';
   document.getElementById('p-memo').value=p.memo||'';
   document.getElementById('prop-modal').classList.add('open');
 }
@@ -574,10 +616,13 @@ function saveProp(){
     status:document.getElementById('p-status').value,
     fee:parseInt(document.getElementById('p-fee').value)||0,
     schedule:document.getElementById('p-schedule').value.trim(),
+    confirmDate:document.getElementById('p-confirm-date').value,
+    confirmStart:document.getElementById('p-confirm-start').value,
     memo:document.getElementById('p-memo').value.trim(),
   };
   if(propEditId){const i=proposals.findIndex(x=>x.id===propEditId);if(i>=0)proposals[i]=row}
   else proposals.push(row);
+  autoRegisterFromProposal(row);
   save();renderPropStats();renderPropCards();closePropModal();
 }
 function delProp(id){if(!confirm('삭제할까요?'))return;proposals=proposals.filter(x=>x.id!==id);save();renderPropStats();renderPropCards()}
