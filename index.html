@@ -256,15 +256,15 @@ function localDateStr(d){
 }
 function todayStr(){return localDateStr(new Date())}
 
-let lectures  = JSON.parse(localStorage.getItem('lec_v2')||'[]');
-let proposals = JSON.parse(localStorage.getItem('prop_v2')||'[]');
+let lectures  = JSON.parse(localStorage.getItem('lec_v3')||'[]');
+let proposals = JSON.parse(localStorage.getItem('prop_v3')||'[]');
 let lecEditId=null, propEditId=null;
 let filterType='all', sortBy='date', propFilterStatus='all';
 let calYear=new Date().getFullYear(), calMonth=new Date().getMonth();
 
 function save(){
-  localStorage.setItem('lec_v2',JSON.stringify(lectures));
-  localStorage.setItem('prop_v2',JSON.stringify(proposals));
+  localStorage.setItem('lec_v3',JSON.stringify(lectures));
+  localStorage.setItem('prop_v3',JSON.stringify(proposals));
 }
 
 /* helpers */
@@ -342,12 +342,12 @@ function saveLec(){
   } else {
     lectures.push(row);
   }
-  save();renderStats();renderTable();closeLecModal();
+  save();renderStats();renderTable();renderCal();closeLecModal();
 }
 function delLec(id){
   if(!confirm('삭제할까요?'))return;
   lectures=lectures.filter(x=>x.id!==id);
-  save();renderStats();renderTable();
+  save();renderStats();renderTable();renderCal();
 }
 
 /* ── 통계 ── */
@@ -542,6 +542,7 @@ function updatePropStatus(id,val){
   renderPropCards();
   renderStats();
   renderTable();
+  renderCal();
 }
 
 /* 제안서 → 스케줄 자동 등록 핵심 함수 */
@@ -632,7 +633,7 @@ function saveProp(){
   /* 확정이면 스케줄 자동 등록 */
   if(status==='확정') autoRegister(row);
   save();
-  renderPropStats();renderPropCards();renderStats();renderTable();
+  renderPropStats();renderPropCards();renderStats();renderTable();renderCal();
   closePropModal();
 }
 function delProp(id){
@@ -643,26 +644,29 @@ function delProp(id){
 
 /* ── 샘플 데이터 (현재 날짜 기준) ── */
 if(!lectures.length){
-  const y=new Date().getFullYear(), m=String(new Date().getMonth()+1).padStart(2,'0');
-  const nm=String(new Date().getMonth()+2>12?1:new Date().getMonth()+2).padStart(2,'0');
-  const ny=new Date().getMonth()+2>12?y+1:y;
+  const now=new Date();
+  const y=now.getFullYear();
+  const m=String(now.getMonth()+1).padStart(2,'0');
+  const nextMonthDate=new Date(y, now.getMonth()+1, 1);
+  const ny=nextMonthDate.getFullYear();
+  const nm=String(nextMonthDate.getMonth()+1).padStart(2,'0');
   lectures=[
     {id:'lec_1',name:'Vibe Coding 기초 과정',org:'서울산업진흥원',orgType:'공공기관',date:y+'-'+m+'-10',note:'총 4회',startTime:'10:00',endTime:'12:00',regCount:20,compCount:18,fee:400000,paid:'입금완료'},
     {id:'lec_2',name:'AI 활용 실무과정',org:'(주)ABC기업',orgType:'민간기관',date:y+'-'+m+'-18',note:'',startTime:'14:00',endTime:'17:00',regCount:15,compCount:0,fee:600000,paid:'미입금'},
-    {id:'lec_3',name:'ChatGPT 업무활용',org:'한국직업전문학교',orgType:'교육기관',date:y+'-'+nm+'-05',note:'격주 목요일',startTime:'10:00',endTime:'11:30',regCount:30,compCount:0,fee:300000,paid:'일부입금'},
+    {id:'lec_3',name:'ChatGPT 업무활용',org:'한국직업전문학교',orgType:'교육기관',date:ny+'-'+nm+'-05',note:'격주 목요일',startTime:'10:00',endTime:'11:30',regCount:30,compCount:0,fee:300000,paid:'일부입금'},
   ];
   proposals=[
     {id:'prop_s1',name:'Vibe Coding 심화과정',org:'성동구청',orgType:'공공기관',contact:'김민준 담당',tel:'02-123-4567',date:y+'-'+m+'-01',status:'검토중',fee:500000,schedule:nm+'월 중 3회',confirmDate:'',confirmStart:'10:00',memo:'회신 대기 중'},
-    {id:'prop_s2',name:'AI 마케팅 활용',org:'(주)패션브랜드',orgType:'민간기관',contact:'이수진 이사',tel:'010-9876-5432',date:y+'-'+m+'-05',status:'확정',fee:400000,schedule:nm+'월 초 1회',confirmDate:y+'-'+nm+'-12',confirmStart:'14:00',memo:'계약서 발송 완료'},
+    {id:'prop_s2',name:'AI 마케팅 활용',org:'(주)패션브랜드',orgType:'민간기관',contact:'이수진 이사',tel:'010-9876-5432',date:y+'-'+m+'-05',status:'확정',fee:400000,schedule:nm+'월 초 1회',confirmDate:ny+'-'+nm+'-12',confirmStart:'14:00',memo:'계약서 발송 완료'},
   ];
-  // 확정 샘플은 스케줄에도 자동 추가
-  lectures.push({id:'lec_s2',srcId:'prop_prop_s2',name:'AI 마케팅 활용',org:'(주)패션브랜드',orgType:'민간기관',date:y+'-'+nm+'-12',note:'📨 제안서 확정 자동등록',startTime:'14:00',endTime:'',regCount:0,compCount:0,fee:400000,paid:'미입금'});
+  lectures.push({id:'lec_s2',srcId:'prop_prop_s2',name:'AI 마케팅 활용',org:'(주)패션브랜드',orgType:'민간기관',date:ny+'-'+nm+'-12',note:'📨 제안서 확정 자동등록',startTime:'14:00',endTime:'',regCount:0,compCount:0,fee:400000,paid:'미입금'});
   save();
 }
 
 /* init */
 renderStats();
 renderTable();
+renderCal();
 </script>
 </body>
 </html>
