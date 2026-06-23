@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>강의 스케줄 관리</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;font-size:14px;color:#1a1a1a;background:#f5f6f8}
@@ -406,7 +406,21 @@ function renderTable(){
 /* ── 엑셀 내보내기 ── */
 function exportXlsx(){
   if(!lectures.length){alert('내보낼 데이터가 없어요.');return}
-  const rows=lectures.map(r=>({
+
+  /* CSV 생성 함수 */
+  function makeCSV(headers, rows){
+    const esc=v=>{
+      const s=String(v==null?'':v);
+      return (s.includes(',')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s;
+    };
+    return [headers.map(esc).join(','),
+      ...rows.map(r=>headers.map(h=>esc(r[h]||'')).join(','))
+    ].join('\r\n');
+  }
+
+  /* 강의 스케줄 CSV */
+  const lecHeaders=['강좌명','교육처','교육처유형','강의날짜','요일','시작시간','종료시간','소요시간(분)','수강신청인원','수강완료인원','강의료(원)','입금여부','비고'];
+  const lecRows=lectures.map(r=>({
     '강좌명':r.name||'','교육처':r.org||'','교육처유형':r.orgType||'',
     '강의날짜':r.date||'','요일':r.date?DAYS[new Date(r.date+'T00:00:00').getDay()]+'요일':'',
     '시작시간':r.startTime||'','종료시간':r.endTime||'',
@@ -414,22 +428,32 @@ function exportXlsx(){
     '수강신청인원':r.regCount||0,'수강완료인원':r.compCount||0,
     '강의료(원)':r.fee||0,'입금여부':r.paid||'미입금','비고':r.note||''
   }));
-  const ws=XLSX.utils.json_to_sheet(rows);
-  ws['!cols']=[{wch:22},{wch:18},{wch:10},{wch:12},{wch:8},{wch:8},{wch:8},{wch:12},{wch:12},{wch:12},{wch:14},{wch:10},{wch:20}];
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,'강의스케줄',ws);
-  if(proposals.length){
-    const prows=proposals.map(p=>({
-      '제안강좌명':p.name||'','교육처':p.org||'','교육처유형':p.orgType||'',
-      '담당자':p.contact||'','연락처':p.tel||'','발송일자':p.date||'',
-      '진행상태':p.status||'','제안강의료(원)':p.fee||0,
-      '희망일정':p.schedule||'','확정날짜':p.confirmDate||'','메모':p.memo||''
-    }));
-    const ws2=XLSX.utils.json_to_sheet(prows);
-    ws2['!cols']=[{wch:22},{wch:18},{wch:10},{wch:12},{wch:16},{wch:12},{wch:10},{wch:14},{wch:16},{wch:12},{wch:30}];
-    XLSX.utils.book_append_sheet(wb,'제안서발송',ws2);
+
+  /* 제안서 CSV */
+  const propHeaders=['제안강좌명','교육처','교육처유형','담당자','연락처','발송일자','진행상태','제안강의료(원)','희망일정','확정날짜','메모'];
+  const propRows=proposals.map(p=>({
+    '제안강좌명':p.name||'','교육처':p.org||'','교육처유형':p.orgType||'',
+    '담당자':p.contact||'','연락처':p.tel||'','발송일자':p.date||'',
+    '진행상태':p.status||'','제안강의료(원)':p.fee||0,
+    '희망일정':p.schedule||'','확정날짜':p.confirmDate||'','메모':p.memo||''
+  }));
+
+  /* BOM 포함 UTF-8 — 엑셀에서 한글 깨짐 방지 */
+  function download(filename, csvContent){
+    const BOM='\uFEFF';
+    const blob=new Blob([BOM+csvContent],{type:'text/csv;charset=utf-8;'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{URL.revokeObjectURL(url);document.body.removeChild(a);},200);
   }
-  XLSX.writeFile(wb,'강의스케줄_'+todayStr()+'.xlsx');
+
+  download('강의스케줄_'+todayStr()+'.csv', makeCSV(lecHeaders, lecRows));
+  if(proposals.length){
+    setTimeout(()=>download('제안서발송_'+todayStr()+'.csv', makeCSV(propHeaders, propRows)), 500);
+  }
+  alert('다운로드 시작! 파일을 엑셀로 열어주세요.\n(강의스케줄.csv + 제안서발송.csv)');
 }
 
 /* ── 달력 ── */
